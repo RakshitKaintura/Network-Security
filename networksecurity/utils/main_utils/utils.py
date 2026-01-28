@@ -55,7 +55,6 @@ def load_object(file_path: str, ) -> object:
         if not os.path.exists(file_path):
             raise Exception(f"The file: {file_path} is not exists")
         with open(file_path, "rb") as file_obj:
-            # print(file_obj) # Commented out to reduce noise in logs
             return pickle.load(file_obj)
     except Exception as e:
         raise NetworkSecurityException(e, sys) from e
@@ -98,6 +97,7 @@ def evaluate_models(X_train, y_train, X_test, y_test, models, param):
             train_model_score = accuracy_score(y_train, y_train_pred)
             test_model_score = accuracy_score(y_test, y_test_pred)
 
+            # We log or use test_model_score for final reporting
             report[model_name] = test_model_score
 
         return report

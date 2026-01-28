@@ -21,7 +21,8 @@ from sklearn.ensemble import (
     GradientBoostingClassifier,
     RandomForestClassifier,
 )
-from xgboost import XGBClassifier
+# Added XGBoost
+from xgboost import XGBClassifier 
 
 class ModelTrainer:
     def __init__(self, model_trainer_config: ModelTrainerConfig, data_transformation_artifact: DataTransformationArtifact):
@@ -31,7 +32,10 @@ class ModelTrainer:
         except Exception as e:
             raise NetworkSecurityException(e, sys)
         
+    # Removed track_mlflow method entirely
+
     def train_model(self, X_train, y_train, x_test, y_test):
+        # 1. Added XGBClassifier to models
         models = {
                 "Random Forest": RandomForestClassifier(verbose=1),
                 "Decision Tree": DecisionTreeClassifier(),
@@ -41,41 +45,28 @@ class ModelTrainer:
                 "XGBClassifier": XGBClassifier(),
             }
         
-        # Expanded Hyperparameter Grid
+        # 2. Added XGBClassifier parameters
         params = {
             "Decision Tree": {
                 'criterion': ['gini', 'entropy', 'log_loss'],
-                'splitter': ['best', 'random'],
-                'max_features': ['sqrt', 'log2'],
             },
             "Random Forest": {
-                'criterion': ['gini', 'entropy', 'log_loss'],
-                'n_estimators': [8, 16, 32, 64, 128, 256],
-                'max_features': ['sqrt', 'log2', None],
+                'n_estimators': [8, 16, 32, 128, 256]
             },
             "Gradient Boosting": {
-                'loss': ['log_loss', 'exponential'],
-                'learning_rate': [0.1, 0.01, 0.05, 0.001],
-                'subsample': [0.6, 0.7, 0.75, 0.8, 0.85, 0.9],
-                'criterion': ['friedman_mse', 'squared_error'],
+                'learning_rate': [.1, .01, .05, .001],
+                'subsample': [0.6, 0.7, 0.75, 0.85, 0.9],
                 'n_estimators': [8, 16, 32, 64, 128, 256]
             },
-            "Logistic Regression": {
-                # Solvers and penalties must be compatible
-                'penalty': ['l2'], 
-                'C': [0.01, 0.1, 1, 10, 100], # Inverse of regularization strength
-                'solver': ['lbfgs', 'liblinear', 'newton-cg']
-            },
+            "Logistic Regression": {},
             "AdaBoost": {
-                'learning_rate': [0.1, 0.01, 0.5, 0.001],
+                'learning_rate': [.1, .01, .001],
                 'n_estimators': [8, 16, 32, 64, 128, 256]
             },
             "XGBClassifier": {
                 'learning_rate': [0.1, 0.01, 0.05, 0.001],
                 'n_estimators': [8, 16, 32, 64, 128, 256],
-                'max_depth': [3, 5, 6, 10],  # Depth of the tree
-                'gamma': [0, 0.1, 0.2, 0.5], # Minimum loss reduction required for split
-                'colsample_bytree': [0.5, 0.7, 1.0] # Subsample ratio of columns 
+                'max_depth': [3, 5, 7, 10], 
             }
         }
         
@@ -91,19 +82,17 @@ class ModelTrainer:
         ]
         best_model = models[best_model_name]
         
-        # Fit the best model on the full training data
+        # Ensure the best model is fitted on the training data
         best_model.fit(X_train, y_train)
-        
-        y_train_pred = best_model.predict(X_train)
 
+        y_train_pred = best_model.predict(X_train)
         classification_train_metric = get_classification_score(y_true=y_train, y_pred=y_train_pred)
         
-        ## Track the experiments with mlflow
-        
+        # Calculate test metrics
         y_test_pred = best_model.predict(x_test)
         classification_test_metric = get_classification_score(y_true=y_test, y_pred=y_test_pred)
 
-        # self.track_mlflow(best_model, classification_test_metric)
+        # Removed self.track_mlflow calls
 
         preprocessor = load_object(file_path=self.data_transformation_artifact.transformed_object_file_path)
             
@@ -112,9 +101,10 @@ class ModelTrainer:
 
         Network_Model = NetworkModel(preprocessor=preprocessor, model=best_model)
         
+        # Save the NetworkModel object
         save_object(self.model_trainer_config.trained_model_file_path, obj=Network_Model)
         
-        # model pusher
+        # Save the pure model object
         save_object("final_model/model.pkl", best_model)
         
         ## Model Trainer Artifact
