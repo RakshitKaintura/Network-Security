@@ -41,13 +41,15 @@ if __name__ == '__main__':
         logging.info("Data Transformation completed")
         print(data_transformation_artifact)
 
-        # 5. Model Training
+        # 5. Model Training (Includes XGBoost & MLflow Logging)
         logging.info("Model Training started")
         model_trainer_config = ModelTrainerConfig(training_pipeline_config)
         model_trainer = ModelTrainer(model_trainer_config=model_trainer_config, data_transformation_artifact=data_transformation_artifact)
-        model_trainer_artifact = model_trainer.initiate_model_trainer()
-        logging.info("Model Training artifact created")
         
+        # This will now train XGBoost (among others) and log to MLflow
+        model_trainer_artifact = model_trainer.initiate_model_trainer()
+        
+        logging.info("Model Training artifact created")
         print(model_trainer_artifact)
         
     except Exception as e:

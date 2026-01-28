@@ -22,7 +22,9 @@ from sklearn.ensemble import (
     RandomForestClassifier,
 )
 # Added XGBoost
-from xgboost import XGBClassifier 
+from xgboost import XGBClassifier
+import mlflow
+from urllib.parse import urlparse
 
 class ModelTrainer:
     def __init__(self, model_trainer_config: ModelTrainerConfig, data_transformation_artifact: DataTransformationArtifact):
@@ -32,10 +34,33 @@ class ModelTrainer:
         except Exception as e:
             raise NetworkSecurityException(e, sys)
         
-    # Removed track_mlflow method entirely
+    def track_mlflow(self, best_model, classificationmetric):
+        # Determine if we are logging to a file (local) or a server (like DagsHub/AWS)
+        tracking_url_type_store = urlparse(mlflow.get_tracking_uri()).scheme
+        
+        with mlflow.start_run():
+            f1_score = classificationmetric.f1_score
+            precision_score = classificationmetric.precision_score
+            recall_score = classificationmetric.recall_score
+
+            mlflow.log_metric("f1_score", f1_score)
+            mlflow.log_metric("precision", precision_score)
+            mlflow.log_metric("recall_score", recall_score)
+            
+            # --- CRITICAL FIX: Use a STRING for the model name, not the object ---
+            model_name = "NetworkSecurityModel" 
+
+            mlflow.sklearn.log_model(best_model, "model", registered_model_name=model_name)
+            
+            # Note: The logic below is redundant if you just use the line above, 
+            # but keeping it for clarity on how to handle file stores vs servers.
+            # if tracking_url_type_store != "file":
+            #     mlflow.sklearn.log_model(best_model, "model", registered_model_name=model_name)
+            # else:
+            #     mlflow.sklearn.log_model(best_model, "model")
 
     def train_model(self, X_train, y_train, x_test, y_test):
-        # 1. Added XGBClassifier to models
+        # 1. Added XGBClassifier to the models dictionary
         models = {
                 "Random Forest": RandomForestClassifier(verbose=1),
                 "Decision Tree": DecisionTreeClassifier(),
@@ -45,7 +70,7 @@ class ModelTrainer:
                 "XGBClassifier": XGBClassifier(),
             }
         
-        # 2. Added XGBClassifier parameters
+        # 2. Added Hyperparameters for XGBoost
         params = {
             "Decision Tree": {
                 'criterion': ['gini', 'entropy', 'log_loss'],
@@ -82,17 +107,21 @@ class ModelTrainer:
         ]
         best_model = models[best_model_name]
         
-        # Ensure the best model is fitted on the training data
+        # Explicitly refit the best model on the training data
         best_model.fit(X_train, y_train)
 
         y_train_pred = best_model.predict(X_train)
         classification_train_metric = get_classification_score(y_true=y_train, y_pred=y_train_pred)
         
-        # Calculate test metrics
+        ## Track the experiments with mlflow
+        # (Optional: Log training metrics if desired, usually we log Test metrics)
+        # self.track_mlflow(best_model, classification_train_metric)
+
         y_test_pred = best_model.predict(x_test)
         classification_test_metric = get_classification_score(y_true=y_test, y_pred=y_test_pred)
 
-        # Removed self.track_mlflow calls
+        # Log Test metrics and Register the model
+        self.track_mlflow(best_model, classification_test_metric)
 
         preprocessor = load_object(file_path=self.data_transformation_artifact.transformed_object_file_path)
             
@@ -101,10 +130,10 @@ class ModelTrainer:
 
         Network_Model = NetworkModel(preprocessor=preprocessor, model=best_model)
         
-        # Save the NetworkModel object
+        # Save the full NetworkModel object (Preprocessor + Model)
         save_object(self.model_trainer_config.trained_model_file_path, obj=Network_Model)
         
-        # Save the pure model object
+        # Save the pure model object (for Model Pusher / Deployment)
         save_object("final_model/model.pkl", best_model)
         
         ## Model Trainer Artifact
